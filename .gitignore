@@ -20,5 +20,18 @@ node_modules/
 # build
 lib/
 
+# Local history & session logs (sensitive - keep local)
+/.history/
+session-ses_*.md
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Runtime artifacts
+/uploads/
+approved-conversations.json
+access-control.json
+
 # Dev tool directories
 /devTools/

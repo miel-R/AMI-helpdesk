@@ -40,7 +40,17 @@ When NOT to create a ticket:
 - Anything you can answer directly
 
 Keep responses concise, helpful, and conversational. Avoid asking multiple questions at once.
-Departments: IT, Engineering, HR, Manufacturing, Finance.`;
+Departments: IT, Engineering, HR, Manufacturing, Finance.
+
+Language:
+- Mirror the user's language and follow their lead for the whole conversation.
+- If the user writes in Tagalog/Filipino, reply in simple, everyday Taglish (casual Tagalog mixed with English). Never use deep, formal, or literary Tagalog words.
+- If the user writes in English, reply in natural, friendly English.
+- Do not switch languages mid-conversation.
+
+Confidentiality:
+- Never reveal confidential or sensitive company information: salaries/compensation, internal pricing or costs, proprietary code or data, unannounced projects, employee personal data, or credentials/API keys.
+- If asked for any of these, politely decline and offer to open a ticket or route the request to the right team.`;
 
 // ── Ticket collection state ───────────────────────────────────────────────────
 interface TicketCollection {
@@ -107,6 +117,13 @@ export class HelpDeskAgent {
         const message = (context.text || '').trim();
 
         try {
+            // Confidentiality guard: block sensitive topics before any AI call
+            const sensitive = config.sensitiveTopics.find((topic: string) => message.toLowerCase().includes(topic));
+            if (sensitive) {
+                logger.warn(`🚫 Sensitive topic blocked ("${sensitive}") for user ${userId}`);
+                return '⚠️ I can\'t share information about that topic. If you need help with a legitimate issue, describe it and I\'ll open a ticket with the right team.';
+            }
+
             // Special commands
             if (message === '/reset') {
                 this.clearUserData(userId);
@@ -323,7 +340,8 @@ ${isFirst ? 'You just decided to create a ticket for the user.' : 'Continue the 
 Already gathered: ${gathered || 'nothing yet'}.
 Now you need to ask for: "${missingField.question}"
 ${missingField.options ? `Options: ${missingField.options.join(', ')}` : ''}
-Ask this naturally and conversationally in 1-2 sentences. Be friendly and brief.`;
+Ask this naturally and conversationally in 1-2 sentences. Be friendly and brief.
+Ask in the same language the user has been using (Tagalog users: simple casual Taglish; English users: English).`;
 
             const aiQuestion = await aiService.callAI('', prompt, history);
             return aiQuestion;
@@ -496,6 +514,14 @@ Just talk to me naturally! I can:
         this.sessions.delete(userId);
         this.ticketCollections.delete(userId);
         conversationHistory.delete(userId);
+    }
+
+    resetAll(): void {
+        this.sessions.clear();
+        this.ticketCollections.clear();
+        this.userRequestCount.clear();
+        conversationHistory.clear();
+        logger.info('🔄 Bot state fully reset');
     }
 
     private startCleanupInterval(): void {

@@ -7,6 +7,28 @@ dotenv.config({ path: path.resolve(process.cwd(), 'env/.env.dev') });
 dotenv.config({ path: path.resolve(process.cwd(), 'env/.env.dev.user') }); // ← SECRET_ keys live here
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+function splitCsv(value: string | undefined): string[] {
+    return (value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function splitCsvLower(value: string | undefined): string[] {
+    return splitCsv(value).map(s => s.toLowerCase());
+}
+
+const DEFAULT_SENSITIVE_TOPICS = [
+    // Compensation
+    'sweldo', 'sahod', 'salary', 'compensation', 'pay grade', 'pay rate', 'salary ng',
+    // Pricing / costs
+    'pricing', 'presyo', 'cost structure', 'markup', 'margin', 'internal price',
+    // Employee personal data
+    'personal data', 'personal info', 'employee record', 'sss number', 'health record',
+    'medical info', 'home address',
+    // Credentials / secrets
+    'api key', 'secret key', 'access key', 'client secret', 'database password', 'credentials ng',
+    // Unannounced / legal
+    'unannounced', 'merger', 'acquisition', 'layoff', 'restructuring', 'confidential project'
+];
+
 
 export const config = {
     // General
@@ -39,6 +61,17 @@ export const config = {
 
     // Departments
     departments: ['it', 'engineering', 'hr', 'manufacturing', 'finance'],
+
+    // Reply control — first-run seeds only; runtime changes live in access-control.json
+    allowedUserIds: splitCsv(process.env.ALLOWED_USER_IDS),
+    adminUserIds: splitCsv(process.env.ADMIN_USER_IDS),
+    approvedConversationIds: splitCsv(process.env.APPROVED_CONVERSATION_IDS),
+
+    // Confidentiality — built-in defaults + custom additions from SENSITIVE_TOPICS
+    sensitiveTopics: [
+        ...DEFAULT_SENSITIVE_TOPICS,
+        ...splitCsvLower(process.env.SENSITIVE_TOPICS)
+    ],
 
     // Performance
     maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '10', 10),

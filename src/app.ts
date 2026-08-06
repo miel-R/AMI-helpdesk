@@ -2,6 +2,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import { agent } from './core/agent';
 import { ticketService } from './services/ticket.service';
+import { flowService } from './services/flow.service';
+import { accessService } from './services/access.service';
 import { config } from './config/config';
 import { logger } from './utils/logger';
 
@@ -32,6 +34,19 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             logger.info('👋 User joined the conversation');
 
             const membersAdded = body.membersAdded || [];
+            const botAdded = membersAdded.some((m: any) => m.id === body.recipient?.id);
+            const isGroupChat = body.conversation?.conversationType === 'groupChat';
+
+            // GC approval gate: bot was added to a group chat that isn't approved yet
+            if (isGroupChat && botAdded && !accessService.isApproved(body.conversation.id)) {
+                if (!accessService.isNotified(body.conversation.id)) {
+                    const notice = '⚠️ This group chat is not approved by the Help Desk administrator yet. Ami won\'t respond here until an administrator approves this chat (admin: /approve).';
+                    await sendReply(body, notice);
+                    accessService.markNotified(body.conversation.id);
+                }
+                return;
+            }
+
             const userAdded = membersAdded.find((m: any) => m.id !== body.recipient?.id);
 
             if (userAdded) {
@@ -44,6 +59,21 @@ app.post('/api/messages', async (req: Request, res: Response) => {
 
         // Handle message type
         if (body.type === 'message') {
+            const isGroupChat = body.conversation?.conversationType === 'groupChat';
+            const senderId = body.from?.id;
+
+            // Admin commands work everywhere, including unapproved group chats
+            if (senderId && accessService.isAdmin(senderId)) {
+                const handled = await handleAdminCommand(body);
+                if (handled) return;
+            }
+
+            // GC approval gate: stay silent in unapproved group chats
+            if (isGroupChat && !accessService.isApproved(body.conversation.id)) {
+                logger.info(`🚫 Ignored message in unapproved group chat ${body.conversation.id}`);
+                return;
+            }
+
             // Check if bot was mentioned
             const isMentioned = checkIfBotMentioned(body);
             const isEmulator = body.channelId === 'emulator' || body.channelId === 'test';
@@ -72,6 +102,12 @@ app.post('/api/messages', async (req: Request, res: Response) => {
                 return;
             }
 
+            // Allowlist: only configured users may trigger Ami (admins always allowed)
+            if (!accessService.isAllowedUser(body.from.id)) {
+                logger.info(`🚫 User ${body.from.id} not allowed, ignoring message`);
+                return;
+            }
+
             // Handle empty text
             if (!body.text || body.text.trim() === '') {
                 logger.warn('⚠️ Empty message received');
@@ -96,6 +132,71 @@ app.post('/api/messages', async (req: Request, res: Response) => {
         // The response has already been sent, so we just log the error.
     }
 });
+
+// Helper: Admin runtime management commands
+async function handleAdminCommand(activity: any): Promise<boolean> {
+    const text = removeMention((activity.text || '').trim(), activity.recipient?.id).trim();
+    const convId = activity.conversation?.id;
+
+    const match = text.match(/^\/(allow|disallow|allowlist|addadmin|removeadmin|admins|approve|restart)\b(.*)$/i);
+    if (!match) return false;
+
+    const cmd = match[1].toLowerCase();
+    const arg = (match[2] || '').trim();
+
+    switch (cmd) {
+        case 'allow':
+            if (!arg) { await sendReply(activity, 'Usage: /allow <user-id>'); return true; }
+            accessService.allowUser(arg);
+            await sendReply(activity, `✅ User ${arg} added to the allowlist.`);
+            return true;
+
+        case 'disallow':
+            if (!arg) { await sendReply(activity, 'Usage: /disallow <user-id>'); return true; }
+            if (accessService.disallowUser(arg)) {
+                await sendReply(activity, `🚫 User ${arg} removed from the allowlist.`);
+            } else {
+                await sendReply(activity, '⚠️ User not allowed or is an admin (remove admin first).');
+            }
+            return true;
+
+        case 'allowlist':
+            await sendReply(activity, `👥 Allowed users:\n${accessService.listAllowed().map((id, i) => `${i + 1}. ${id}`).join('\n') || '(none)'}\n\n👮 Admins:\n${accessService.listAdmins().map((id, i) => `${i + 1}. ${id}`).join('\n') || '(none)'}`);
+            return true;
+
+        case 'addadmin':
+            if (!arg) { await sendReply(activity, 'Usage: /addadmin <user-id>'); return true; }
+            accessService.addAdmin(arg);
+            await sendReply(activity, `✅ User ${arg} is now an administrator.`);
+            return true;
+
+        case 'removeadmin':
+            if (!arg) { await sendReply(activity, 'Usage: /removeadmin <user-id>'); return true; }
+            accessService.removeAdmin(arg);
+            await sendReply(activity, `🚫 User ${arg} is no longer an administrator.`);
+            return true;
+
+        case 'admins':
+            await sendReply(activity, `👮 Admins:\n${accessService.listAdmins().map((id, i) => `${i + 1}. ${id}`).join('\n') || '(none)'}`);
+            return true;
+
+        case 'approve':
+            if (!convId) { await sendReply(activity, '⚠️ Could not identify this conversation.'); return true; }
+            accessService.approve(convId);
+            await sendReply(activity, '✅ This group chat has been approved by the administrator. Ami is now active here. Remember to @mention Ami to get a response.');
+            return true;
+
+        case 'restart':
+            agent.resetAll();
+            flowService.reload();
+            accessService.reload();
+            await sendReply(activity, '🔄 Soft restart complete. Sessions cleared, flows and access lists reloaded.');
+            return true;
+
+        default:
+            return false;
+    }
+}
 
 // Helper: Check if bot was mentioned
 function checkIfBotMentioned(activity: any): boolean {

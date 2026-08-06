@@ -18,8 +18,11 @@ Teams help desk bot ("Ami") — TypeScript/Express app that hand-implements the 
 - `src/config/config.ts` loads, in order: `.env.dev`, `env/.env.dev`, `env/.env.dev.user`, `.env`. Secrets use a `SECRET_` prefix and live in git-ignored `env/.env.dev.user`; config falls back to `GEMINI_API_KEY || SECRET_GEMINI_API_KEY`, etc.
 - Bot credentials (`BOT_ID`, `BOT_PASSWORD`, `BOT_ENDPOINT`) come from `.localConfigs` via the `dev:teamsfx` scripts, not from `config.ts`.
 - `AI_PROVIDER` = auto|gemini|openai|azure; `auto` picks the first key present (Gemini → OpenAI → Azure). With no key the provider is `none` and the bot falls back to keyword rules.
+- Reply control: `ALLOWED_USER_IDS`, `ADMIN_USER_IDS`, `APPROVED_CONVERSATION_IDS` are first-run seeds only — after that `src/services/access.service.ts` persists everything to git-ignored `access-control.json` (default-deny; admins always allowed). Manage at runtime via admin commands: `/allow <id>`, `/disallow <id>`, `/allowlist`, `/addadmin <id>`, `/removeadmin <id>`, `/admins`, `/approve`, `/restart` (soft restart: clears sessions, reloads flows + access lists).
+- Confidentiality: `SENSITIVE_TOPICS` (comma-separated phrases) is merged with built-in defaults in `config.ts`; matches are refused in `agent.ts` before any AI call.
 
 ## Bot runtime (`src/app.ts`)
 - `POST /api/messages` is the Bot Framework endpoint. It acks 200 immediately and replies asynchronously, POSTing to `serviceUrl/v3/conversations/{id}/activities` via axios with no auth token — emulator only, not real Teams.
 - In Teams it responds only when @-mentioned; `channelId === 'emulator'|'test'` responds to everything.
+- Group chat approval gate: being added to an unapproved GC posts a "not approved" notice once, then all messages are ignored until an admin (`ADMIN_USER_IDS`) sends `/approve` (or `approve this chat`) in that GC.
 - Other endpoints: `GET /api/health`, `GET /api/tickets`.
