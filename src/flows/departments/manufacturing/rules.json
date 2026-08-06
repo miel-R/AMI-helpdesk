@@ -1,0 +1,37 @@
+{
+    "department": "manufacturing",
+    "keywords": [
+        "production",
+        "machine",
+        "equipment",
+        "assembly",
+        "line",
+        "quality",
+        "inspection",
+        "defect",
+        "scrap",
+        "downtime",
+        "maintenance",
+        "repair",
+        "calibration",
+        "safety",
+        "material"
+    ],
+    "auto_assign": "manufacturing-team@company.com",
+    "escalation_rules": {
+        "Critical": {
+            "response_time": "15 minutes",
+            "notify": "production-managers@company.com"
+        },
+        "High": {
+            "response_time": "1 hour",
+            "notify": "production-supervisors@company.com"
+        },
+        "Medium": {
+            "response_time": "4 hours"
+        },
+        "Low": {
+            "response_time": "1 day"
+        }
+    }
+}

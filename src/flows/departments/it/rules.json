@@ -1,0 +1,49 @@
+{
+    "department": "it",
+    "keywords": [
+        "computer",
+        "laptop",
+        "monitor",
+        "keyboard",
+        "mouse",
+        "network",
+        "internet",
+        "wifi",
+        "ethernet",
+        "connection",
+        "email",
+        "outlook",
+        "teams",
+        "office",
+        "password",
+        "login",
+        "access",
+        "permission",
+        "account",
+        "printer",
+        "scanner",
+        "software",
+        "application",
+        "vpn",
+        "security",
+        "virus",
+        "malware"
+    ],
+    "auto_assign": "it-team@company.com",
+    "escalation_rules": {
+        "Critical": {
+            "response_time": "15 minutes",
+            "notify": "it-managers@company.com"
+        },
+        "High": {
+            "response_time": "1 hour",
+            "notify": "it-supervisors@company.com"
+        },
+        "Medium": {
+            "response_time": "4 hours"
+        },
+        "Low": {
+            "response_time": "1 day"
+        }
+    }
+}

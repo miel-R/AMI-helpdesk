@@ -1,0 +1,37 @@
+{
+    "department": "finance",
+    "keywords": [
+        "invoice",
+        "payment",
+        "billing",
+        "accounting",
+        "payroll",
+        "tax",
+        "audit",
+        "expense",
+        "budget",
+        "reporting",
+        "reconciliation",
+        "deposit",
+        "withdrawal",
+        "transfer",
+        "vat"
+    ],
+    "auto_assign": "finance-team@company.com",
+    "escalation_rules": {
+        "Critical": {
+            "response_time": "30 minutes",
+            "notify": "finance-managers@company.com"
+        },
+        "High": {
+            "response_time": "2 hours",
+            "notify": "finance-supervisors@company.com"
+        },
+        "Medium": {
+            "response_time": "8 hours"
+        },
+        "Low": {
+            "response_time": "1 day"
+        }
+    }
+}

@@ -1,0 +1,67 @@
+{
+    "base_flow": {
+        "name": "Help Desk Base Flow",
+        "description": "Base flow for all departments",
+        "initial_questions": [
+            {
+                "id": "issue_type",
+                "question": "👋 Welcome to the Amertron Help Desk! To start, what type of issue are you experiencing?",
+                "type": "select",
+                "options": [
+                    "Technical/System Issue",
+                    "Access/Permission Request",
+                    "Hardware/Equipment Problem",
+                    "Software/Application Error",
+                    "Network/Connectivity Issue",
+                    "General Inquiry",
+                    "Other"
+                ],
+                "required": true,
+                "next": "description"
+            },
+            {
+                "id": "description",
+                "question": "Please describe your issue in detail:",
+                "type": "text",
+                "required": true,
+                "next": "urgency"
+            },
+            {
+                "id": "urgency",
+                "question": "How urgent is this issue?",
+                "type": "select",
+                "options": [
+                    "Critical - Cannot work at all",
+                    "High - Affecting my work",
+                    "Medium - Can work around",
+                    "Low - Can wait"
+                ],
+                "required": true,
+                "next": "department"
+            },
+            {
+                "id": "department",
+                "question": "Which department should this be routed to?",
+                "type": "select",
+                "options": [
+                    "Information Technology (IT)",
+                    "Engineering",
+                    "Human Resources (HR)",
+                    "Manufacturing",
+                    "Finance",
+                    "Other"
+                ],
+                "required": true,
+                "next": "name"
+            },
+            {
+                "id": "name",
+                "question": "Finally, what is your full name?",
+                "type": "text",
+                "required": true,
+                "next": "completion"
+            }
+        ],
+        "completion_message": "✅ Thank you for providing all the information! Our team will review and assist you shortly."
+    }
+}

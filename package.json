@@ -1,0 +1,51 @@
+{
+    "name": "helpdeskbot",
+    "version": "1.0.0",
+    "msteams": {
+        "teamsAppId": null
+    },
+    "description": "Amertron Helpdesk Bot - Merged",
+    "author": "Microsoft",
+    "license": "MIT",
+    "main": "./lib/src/index.js",
+    "scripts": {
+        "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run dev",
+        "dev:teamsfx:playground": "env-cmd --silent -f .localConfigs.playground npm run dev",
+        "dev:teamsfx:launch-playground": "env-cmd --silent -f env/.env.playground agentsplayground start",
+        "dev": "nodemon --exec ts-node src/index.ts",
+        "build": "tsc --build",
+        "start": "node ./lib/src/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "watch": "nodemon --exec \"npm run start\""
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com"
+    },
+    "dependencies": {
+        "@azure/identity": "^4.8.0",
+        "@azure/openai": "^2.0.0",
+        "@google/genai": "^2.15.0",
+        "@microsoft/agents-hosting-express": "^1.0.0",
+        "axios": "^1.5.0",
+        "dotenv": "^17.4.2",
+        "express": "^4.18.2",
+        "node-cache": "^5.1.2",
+        "openai": "^4.94.0",
+        "uuid": "^9.0.0"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/node": "^22.0.0",
+        "@types/uuid": "^9.0.3",
+        "env-cmd": "^10.1.0",
+        "nodemon": "^3.1.10",
+        "shx": "^0.4.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3"
+    },
+    "allowScripts": {
+        "@google/genai@2.15.0": true,
+        "protobufjs@7.6.5": true
+    }
+}
