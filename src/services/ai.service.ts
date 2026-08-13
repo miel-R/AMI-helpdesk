@@ -94,10 +94,12 @@ export class AIService {
             return '⚠️ No AI provider configured. Please set GEMINI_API_KEY or OPENAI_API_KEY in your env file.';
         }
 
-        // Cache stateless (no-history) calls to reduce API usage
+        // Cache stateless (no-history) calls to reduce API usage.
+        // Image calls are never cached (cache key holds no image reference).
         const isStateless = !history || history.length === 0;
+        const cacheable = isStateless && !image;
         const cacheKey = `ai:${this.activeProvider}:${userMessage.substring(0, 100)}`;
-        if (isStateless) {
+        if (cacheable) {
             const cached = cache.get<string>(cacheKey);
             if (cached) {
                 logger.info('✅ AI response served from cache');
@@ -123,7 +125,7 @@ export class AIService {
             }
 
             // Cache stateless responses
-            if (isStateless && response && response.length > 10) {
+            if (cacheable && response && response.length > 10) {
                 cache.set(cacheKey, response);
             }
 
@@ -166,11 +168,18 @@ export class AIService {
             }
             contents.push({ role: 'user', parts });
         } else if (image) {
-            // Attach image to the last user turn in history
-            const last = contents[contents.length - 1];
-            if (last?.role === 'user') {
-                last.parts.push({ inlineData: { mimeType: image.mimeType, data: image.base64Data } });
-            }
+            // Multi-turn history makes the model lose the attached image (reproduced
+            // against the live API): collapse to just the current user turn + image.
+            const lastUserText = [...(history || [])].reverse().find(i => i.role === 'user')?.content;
+            const text = userMessage || lastUserText || 'Analyze this image and respond.';
+            contents.length = 0;
+            contents.push({
+                role: 'user',
+                parts: [
+                    { text },
+                    { inlineData: { mimeType: image.mimeType, data: image.base64Data } }
+                ]
+            });
         }
 
         const payload = {

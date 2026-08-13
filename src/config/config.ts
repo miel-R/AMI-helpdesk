@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import os from 'os';
 import path from 'path';
 
 // Load env files in priority order — user secrets last so they override non-secret values
@@ -54,10 +55,11 @@ export const config = {
     openAIApiKey: process.env.OPENAI_API_KEY || process.env.SECRET_OPENAI_API_KEY || '',
     openAIModel: process.env.OPENAI_MODEL || 'gpt-4o',
 
-    // Image handling
+    // Image handling — default to the OS temp dir so saved images never land
+    // inside the watched project tree (prevents dev-tool restarts on uploads).
     maxImageSizeMB: parseInt(process.env.MAX_IMAGE_SIZE_MB || '10', 10),
     allowedImageTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'],
-    uploadDir: process.env.UPLOAD_DIR || './uploads',
+    uploadDir: process.env.UPLOAD_DIR || path.join(os.tmpdir(), 'ami-uploads'),
 
     // Departments
     departments: ['it', 'engineering', 'hr', 'manufacturing', 'finance'],
@@ -76,7 +78,7 @@ export const config = {
     // Performance
     maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '10', 10),
     queueTimeout: parseInt(process.env.QUEUE_TIMEOUT || '30000', 10),
-    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '1800000', 10),
+    sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '120000', 10), // ms of user inactivity before the conversation is ended (default: 2 min)
     rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10),
     maxRequestsPerWindow: parseInt(process.env.MAX_REQUESTS_PER_WINDOW || '10', 10),
 

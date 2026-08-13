@@ -1,0 +1,12 @@
+{
+  "watch": ["src"],
+  "ignore": [
+    "dist",
+    "uploads",
+    "access-control.json",
+    "env",
+    "session-ses_*.md",
+    "*.tsbuildinfo",
+    "appPackage/build"
+  ]
+}

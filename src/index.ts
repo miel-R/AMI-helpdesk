@@ -1,6 +1,18 @@
 import { app } from './app';
 import { config } from './config/config';
 import { logger } from './utils/logger';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const hasNodemonConfig = fs.existsSync(path.join(process.cwd(), 'nodemon.json'));
+
+logger.info(`📁 CWD: ${process.cwd()}`);
+logger.info(`📁 Upload dir: ${config.uploadDir}`);
+logger.info(
+    hasNodemonConfig
+        ? '📁 nodemon.json present — nodemon watches src only'
+        : '⚠️ nodemon.json MISSING — nodemon watches every file change in the project tree'
+);
 
 const server = app.listen(config.port, () => {
     logger.success(`🚀 ${config.companyName} Help Desk - Ami`);

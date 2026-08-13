@@ -1,6 +1,6 @@
 import { flowService } from '../services/flow.service';
 import { ticketService } from '../services/ticket.service';
-import { aiService, HistoryItem } from '../services/ai.service';
+import { aiService, HistoryItem, ImageData } from '../services/ai.service';
 import { queueService } from '../services/queue.service';
 import { logger } from '../utils/logger';
 import { metrics } from '../utils/metrics';
@@ -46,11 +46,15 @@ Language:
 - Mirror the user's language and follow their lead for the whole conversation.
 - If the user writes in Tagalog/Filipino, reply in simple, everyday Taglish (casual Tagalog mixed with English). Never use deep, formal, or literary Tagalog words.
 - If the user writes in English, reply in natural, friendly English.
+- If the user writes in Taglish, reply in Taglish, but friendly
 - Do not switch languages mid-conversation.
 
 Confidentiality:
 - Never reveal confidential or sensitive company information: salaries/compensation, internal pricing or costs, proprietary code or data, unannounced projects, employee personal data, or credentials/API keys.
 - If asked for any of these, politely decline and offer to open a ticket or route the request to the right team.`;
+
+// ── Farewell message sent when a user's session times out ─────────────────────
+const SESSION_FAREWELL = '👋 It\'s been quiet for a while, so I\'ve ended our conversation to keep things tidy. If you need help again, just send a message and I\'ll be here!';
 
 // ── Ticket collection state ───────────────────────────────────────────────────
 interface TicketCollection {
@@ -64,6 +68,11 @@ export class HelpDeskAgent {
     private sessions: Map<string, Session> = new Map();
     private ticketCollections: Map<string, TicketCollection> = new Map();
     private userRequestCount: Map<string, { count: number; resetTime: number }> = new Map();
+    private lastActivity: Map<string, number> = new Map();
+
+    // Fired when an idle conversation is cleaned up — lets the transport layer
+    // (app.ts) post a farewell to the user's last conversation.
+    public onSessionExpire: ((userId: string, farewell: string) => void) | null = null;
 
     constructor() {
         this.startCleanupInterval();
@@ -115,8 +124,11 @@ export class HelpDeskAgent {
         const startTime = Date.now();
         const userId = context.from?.id || 'unknown';
         const message = (context.text || '').trim();
+        const image = context.image;
 
         try {
+            this.lastActivity.set(userId, Date.now());
+
             // Confidentiality guard: block sensitive topics before any AI call
             const sensitive = config.sensitiveTopics.find((topic: string) => message.toLowerCase().includes(topic));
             if (sensitive) {
@@ -128,6 +140,11 @@ export class HelpDeskAgent {
             if (message === '/reset') {
                 this.clearUserData(userId);
                 return '🔄 Conversation reset. How can I help you?';
+            }
+            if (message === '/end' || message === '/exit' || message === '/quit') {
+                this.clearUserData(userId);
+                logger.info(`👋 User ${userId} ended the conversation with /end`);
+                return `👋 Goodbye! Your conversation has ended. If you ever need help again, just send a message and I'll be here. Take care! 😊`;
             }
             if (message === '/help') {
                 return this.getHelpMessage();
@@ -161,18 +178,21 @@ export class HelpDeskAgent {
             const urgencyScore = this.scoreMessage(message);
             const isUrgent = urgencyScore >= TICKET_THRESHOLD;
 
+            // For image-only messages, give the AI something to respond to
+            const userText = message || (image ? 'Please analyze this image and respond.' : '');
+
             // Add user message to history
-            history.push({ role: 'user', content: message });
+            history.push({ role: 'user', content: userText });
 
             let response: string;
 
             // If we're mid ticket-collection, continue collecting
             const tc = this.ticketCollections.get(userId);
             if (tc && tc.phase === 'gathering') {
-                response = await this.continueTicketCollection(userId, message, tc, history);
+                response = await this.continueTicketCollection(userId, message, tc, history, image);
             } else {
                 // Otherwise, let the AI decide what to do
-                response = await this.processWithAI(userId, message, history, isUrgent, context);
+                response = await this.processWithAI(userId, userText, image, history, isUrgent, context);
             }
 
             // Add bot response to history
@@ -197,13 +217,14 @@ export class HelpDeskAgent {
     private async processWithAI(
         userId: string,
         message: string,
+        image: ImageData | undefined,
         history: HistoryItem[],
         isUrgent: boolean,
         context: UserRequest
     ): Promise<string> {
 
         if (aiService.getActiveProvider() === 'none') {
-            return this.noAIFallback(message, userId, context);
+            return this.noAIFallback(message, userId, context, image);
         }
 
         // Build a rich context-aware system prompt
@@ -214,7 +235,7 @@ export class HelpDeskAgent {
             ? `[URGENT - user may need a ticket] ${message}`
             : message;
 
-        const aiResponse = await aiService.callAI(augmentedMessage, systemPrompt, history);
+        const aiResponse = await aiService.callAI(augmentedMessage, systemPrompt, history, image);
 
         // Detect if AI decided a ticket should be created
         if (this.aiWantsToCreateTicket(aiResponse, message)) {
@@ -301,12 +322,17 @@ Otherwise, answer the user's question directly and helpfully. Do NOT add [CREATE
         userId: string,
         userMessage: string,
         tc: TicketCollection,
-        history: HistoryItem[]
+        history: HistoryItem[],
+        image?: ImageData
     ): Promise<string> {
         // Save the answer for the pending question
         if (tc.pendingQuestion) {
-            tc.gathered[tc.pendingQuestion] = userMessage;
-            logger.info(`💾 Ticket field [${tc.pendingQuestion}] = "${userMessage}"`);
+            const parts: string[] = [];
+            if (userMessage.trim()) parts.push(userMessage.trim());
+            if (image) parts.push(`[Image attached: ${image.fileName || 'attachment'}]`);
+            const answer = parts.join(' ');
+            tc.gathered[tc.pendingQuestion] = answer;
+            logger.info(`💾 Ticket field [${tc.pendingQuestion}] = "${answer}"`);
         }
 
         // Check if all required fields are filled
@@ -466,8 +492,12 @@ End with a reassurance that the team will be in touch. Keep it under 4 sentences
 
     // ── No-AI Fallback ─────────────────────────────────────────────────────────
 
-    private noAIFallback(message: string, userId: string, context: UserRequest): string {
+    private noAIFallback(message: string, userId: string, context: UserRequest, image?: ImageData): string {
         const lower = message.toLowerCase();
+
+        if (image && !(context.text || '').trim()) {
+            return `📸 I received your image (${image.fileName || 'attachment'}), but AI features are limited right now (no API key configured) so I can't analyze it. Describe your issue and I'll create a support ticket for you.`;
+        }
 
         const greetingPattern = /^(hi|hello|hey|good morning|good afternoon|good evening|can i ask|may i ask|yo|sup)/i;
         if (greetingPattern.test(lower) || message.length < 20) {
@@ -500,6 +530,7 @@ Just talk to me naturally! I can:
 **Commands:**
 - \`/reset\` — Clear conversation and start fresh
 - \`/status\` — See current ticket info collected
+- \`/end\` — End the conversation
 - \`/help\` — Show this message
 
 **Examples:**
@@ -514,12 +545,14 @@ Just talk to me naturally! I can:
         this.sessions.delete(userId);
         this.ticketCollections.delete(userId);
         conversationHistory.delete(userId);
+        this.lastActivity.delete(userId);
     }
 
     resetAll(): void {
         this.sessions.clear();
         this.ticketCollections.clear();
         this.userRequestCount.clear();
+        this.lastActivity.clear();
         conversationHistory.clear();
         logger.info('🔄 Bot state fully reset');
     }
@@ -528,14 +561,16 @@ Just talk to me naturally! I can:
         setInterval(() => {
             const now = Date.now();
             let cleaned = 0;
-            for (const [userId, session] of this.sessions) {
-                if (now - session.lastActivity > config.sessionTimeout) {
+            for (const [userId, last] of this.lastActivity) {
+                if (now - last > config.sessionTimeout) {
                     this.clearUserData(userId);
                     cleaned++;
+                    this.onSessionExpire?.(userId, SESSION_FAREWELL);
+                    logger.info(`👋 Ended idle conversation for user ${userId} (${config.sessionTimeout}ms)`);
                 }
             }
             if (cleaned > 0) logger.info(`🧹 Cleaned up ${cleaned} inactive sessions`);
-        }, 300000);
+        }, 30000);
     }
 
     private startHealthMonitoring(): void {

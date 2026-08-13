@@ -51,4 +51,9 @@ export interface UserRequest {
     };
     text: string;
     attachments?: any[];
+    image?: {
+        mimeType: string;
+        base64Data: string;
+        fileName?: string;
+    };
 }

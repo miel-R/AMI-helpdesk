@@ -87,12 +87,19 @@ Runtime access state is persisted to `access-control.json` (git-ignored) in the 
 - **Default-deny**: empty lists mean nobody is allowed (except admins). `allowedUserIds` empty but admins present = admins only.
 - Delete the file to reset all access state (bot re-seeds from env on next start).
 
-## Group Chat Behavior
+## Conversation Gating
 
+### Group chats
 - When Ami is added to a group chat that isn't approved, it posts a **single** "not approved by the administrator" notice, then stays silent.
 - All messages in an unapproved GC are ignored until an admin sends `/approve` in that chat.
 - Approved GCs behave normally (mention-only in Teams).
-- The bot can't prevent being added — it just refuses to operate until approved.
+
+### Personal chats (1:1)
+- Ami is only intended for group chats: in a 1:1 chat, a non-allowed user gets a **one-time** notice ("Ami only works inside approved group chats...") and is then silent forever in that chat.
+- **Allowed users** (on the allowlist) and admins can chat with Ami normally in 1:1.
+- In real Teams, allowed users don't need to @mention Ami in personal chats (mentions are only required in GCs and channels).
+
+The bot can't prevent being added to a chat — it just refuses to operate until approved or allowed.
 
 ## Confidentiality & Language
 

@@ -4,18 +4,33 @@ import { agent } from './core/agent';
 import { ticketService } from './services/ticket.service';
 import { flowService } from './services/flow.service';
 import { accessService } from './services/access.service';
+import { ImageHandler } from './handlers/image.handler';
 import { config } from './config/config';
 import { logger } from './utils/logger';
 
 const app = express();
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '16mb' }));
+app.use(express.urlencoded({ extended: true, limit: '16mb' }));
 
 app.use((req: Request, _res: Response, next: NextFunction) => {
     logger.info(`${req.method} ${req.path}`);
     next();
 });
+
+const imageHandler = new ImageHandler(config.allowedImageTypes, config.maxImageSizeMB, config.uploadDir);
+
+// Last known activity per user, so an idle timeout can post a farewell to the
+// conversation the user was last active in.
+const userContexts: Map<string, any> = new Map();
+
+// When the agent cleans up an idle session, post the farewell to that user
+agent.onSessionExpire = (userId: string, farewell: string) => {
+    const activity = userContexts.get(userId);
+    if (activity) {
+        sendReply(activity, farewell);
+    }
+};
 
 app.post('/api/messages', async (req: Request, res: Response) => {
     // This bot uses an asynchronous reply pattern.
@@ -29,6 +44,10 @@ app.post('/api/messages', async (req: Request, res: Response) => {
         const body = req.body;
         logger.info('📨 Incoming message:', body);
 
+        // The emulator/test channel is a local testing tool: bypass all gating
+        // (mention-only, approval, allowlist) so any session just works.
+        const isEmulator = body.channelId === 'emulator' || body.channelId === 'test';
+
         // Handle conversationUpdate events (when user joins)
         if (body.type === 'conversationUpdate') {
             logger.info('👋 User joined the conversation');
@@ -36,14 +55,20 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             const membersAdded = body.membersAdded || [];
             const botAdded = membersAdded.some((m: any) => m.id === body.recipient?.id);
             const isGroupChat = body.conversation?.conversationType === 'groupChat';
+            const isPersonal = body.conversation?.conversationType === 'personal' || body.conversation?.conversationType === undefined;
 
             // GC approval gate: bot was added to a group chat that isn't approved yet
-            if (isGroupChat && botAdded && !accessService.isApproved(body.conversation.id)) {
+            if (!isEmulator && isGroupChat && botAdded && !accessService.isApproved(body.conversation.id)) {
                 if (!accessService.isNotified(body.conversation.id)) {
-                    const notice = '⚠️ This group chat is not approved by the Help Desk administrator yet. Ami won\'t respond here until an administrator approves this chat (admin: /approve).';
+                    const notice = '⚠️ This group chat is not approved by the Help Desk administrator yet. Ami won\'t respond here until an administrator approves this chat.';
                     await sendReply(body, notice);
                     accessService.markNotified(body.conversation.id);
                 }
+                return;
+            }
+
+            // Personal chat: no welcome — the gate sends a one-time notice on the first message
+            if (isPersonal && botAdded) {
                 return;
             }
 
@@ -69,18 +94,30 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             }
 
             // GC approval gate: stay silent in unapproved group chats
-            if (isGroupChat && !accessService.isApproved(body.conversation.id)) {
+            if (!isEmulator && isGroupChat && !accessService.isApproved(body.conversation.id)) {
                 logger.info(`🚫 Ignored message in unapproved group chat ${body.conversation.id}`);
+                return;
+            }
+
+            // Personal chat gate: only allowed users may chat 1:1; others get a one-time notice then silence
+            const isPersonal = body.conversation?.conversationType === 'personal' || body.conversation?.conversationType === undefined;
+            if (!isEmulator && isPersonal && !accessService.isAllowedUser(senderId)) {
+                if (!accessService.isNotified(body.conversation.id)) {
+                    const notice = '👋 Hi! Ami only works inside approved group chats. Add me to a group chat and have the Help Desk administrator approve it with /approve.';
+                    await sendReply(body, notice);
+                    accessService.markNotified(body.conversation.id);
+                } else {
+                    logger.info(`🚫 Ignored message in personal chat ${body.conversation.id}`);
+                }
                 return;
             }
 
             // Check if bot was mentioned
             const isMentioned = checkIfBotMentioned(body);
-            const isEmulator = body.channelId === 'emulator' || body.channelId === 'test';
 
             // For emulator: allow all messages (for testing)
-            // For Teams: only respond when mentioned
-            if (!isEmulator && !isMentioned) {
+            // For Teams: only respond when mentioned (personal chats don't require mentions)
+            if (!isEmulator && !isMentioned && !isPersonal) {
                 logger.info('🤖 Bot not mentioned, ignoring message');
                 return;
             }
@@ -102,22 +139,35 @@ app.post('/api/messages', async (req: Request, res: Response) => {
                 return;
             }
 
-            // Allowlist: only configured users may trigger Ami (admins always allowed)
-            if (!accessService.isAllowedUser(body.from.id)) {
+            // Allowlist: only configured users may trigger Ami (admins always allowed).
+            // Emulator/test channel bypasses this — it's a local testing tool.
+            if (!isEmulator && !accessService.isAllowedUser(body.from.id)) {
                 logger.info(`🚫 User ${body.from.id} not allowed, ignoring message`);
                 return;
             }
 
-            // Handle empty text
-            if (!body.text || body.text.trim() === '') {
+            // Process image attachments (if any) before anything else
+            let imageData: { mimeType: string; base64Data: string; fileName?: string } | null = null;
+            if (Array.isArray(body.attachments) && body.attachments.length > 0) {
+                imageData = await imageHandler.handleAttachments(body.attachments);
+                if (imageData) {
+                    logger.info(`📸 Image received from ${senderId}: ${imageData.fileName}`);
+                }
+            }
+
+            // Handle empty text (unless an image was attached)
+            if ((!body.text || body.text.trim() === '') && !imageData) {
                 logger.warn('⚠️ Empty message received');
                 const prompt = '👋 How can I help you today? Type "hello" to start.';
                 await sendReply(body, prompt);
                 return;
             }
 
+            // Remember the user's last conversation so a farewell can be posted on timeout
+            userContexts.set(senderId, body);
+
             // Process the message
-            const responseText = await agent.handleMessage(body);
+            const responseText = await agent.handleMessage({ ...body, image: imageData || undefined });
 
             // Send the reply
             await sendReply(body, responseText);

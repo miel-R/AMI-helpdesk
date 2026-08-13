@@ -35,9 +35,8 @@
         {
             "botId": "${{BOT_ID}}",
             "scopes": [
-                "copilot",
                 "personal",
-                "team"
+                "groupChat"
             ],
             "supportsFiles": false,
             "isNotificationOnly": false,
@@ -48,7 +47,9 @@
                         "copilot",
                         "personal"
                     ],
-                    "triggers": ["mention"],
+                    "triggers": [
+                        "mention"
+                    ],
                     "commands": [
                         {
                             "title": "How can you help me?",
