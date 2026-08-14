@@ -99,6 +99,17 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             const isGroupChat = body.conversation?.conversationType === 'groupChat';
             const senderId = body.from?.id;
 
+            // Anyone can check whether they are an administrator (works everywhere)
+            const cmdText = removeMention((body.text || '').trim(), body.recipient?.id).trim();
+            if (senderId && /^\/admin\b/i.test(cmdText)) {
+                if (accessService.isAdmin(senderId)) {
+                    await sendReply(body, '🛡️ Yes — you are an administrator. You can approve chats (/approve) and manage access (/allow, /disallow, /addadmin, /removeadmin, /allowlist, /admins, /restart).');
+                } else {
+                    await sendReply(body, '❌ No — you are not an administrator. Ask a Help Desk admin if you need access.');
+                }
+                return;
+            }
+
             // Admin commands work everywhere, including unapproved group chats
             if (senderId && accessService.isAdmin(senderId)) {
                 const handled = await handleAdminCommand(body);
