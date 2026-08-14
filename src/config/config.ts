@@ -94,6 +94,9 @@ export const config = {
     // Ticket
     ticketPrefix: process.env.TICKET_PREFIX || 'AMR',
     notifyOnTicket: process.env.NOTIFY_ON_TICKET === 'true',
+    // When false (default): no tickets are collected/created — issues trigger
+    // admin alerts instead (see src/services/alert.service.ts + /alert commands).
+    enableTickets: process.env.ENABLE_TICKETS === 'true',
 };
 
 export type Config = typeof config;

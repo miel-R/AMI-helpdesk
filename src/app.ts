@@ -4,6 +4,7 @@ import { agent } from './core/agent';
 import { ticketService } from './services/ticket.service';
 import { flowService } from './services/flow.service';
 import { accessService } from './services/access.service';
+import { alertService } from './services/alert.service';
 import { authenticateIncomingRequest, getBotToken } from './services/auth.service';
 import { ImageHandler } from './handlers/image.handler';
 import { config } from './config/config';
@@ -188,6 +189,8 @@ app.post('/api/messages', async (req: Request, res: Response) => {
 
             // Remember the user's last conversation so a farewell can be posted on timeout
             userContexts.set(senderId, body);
+            // Remember admin conversations so issue alerts can be 1:1'd privately
+            alertService.rememberConversation(senderId, body);
 
             // Process the message
             const responseText = await agent.handleMessage({ ...body, image: imageData || undefined });
@@ -211,7 +214,7 @@ async function handleAdminCommand(activity: any): Promise<boolean> {
     const text = removeMention((activity.text || '').trim(), activity.recipient?.id).trim();
     const convId = activity.conversation?.id;
 
-    const match = text.match(/^\/(allow|disallow|allowlist|addadmin|removeadmin|admins|approve|restart)\b(.*)$/i);
+    const match = text.match(/^\/(allow|disallow|allowlist|addadmin|removeadmin|admins|approve|restart|alert)\b(.*)$/i);
     if (!match) return false;
 
     const cmd = match[1].toLowerCase();
@@ -263,8 +266,50 @@ async function handleAdminCommand(activity: any): Promise<boolean> {
             agent.resetAll();
             flowService.reload();
             accessService.reload();
-            await sendReply(activity, '🔄 Soft restart complete. Sessions cleared, flows and access lists reloaded.');
+            alertService.reload();
+            await sendReply(activity, '🔄 Soft restart complete. Sessions cleared, flows, access and alert config reloaded.');
             return true;
+
+        case 'alert': {
+            const sub = (arg || '').toLowerCase();
+            if (!sub || sub === 'status') {
+                await sendReply(activity, alertService.getStatus());
+                return true;
+            }
+            if (sub === 'on' || sub === 'enable') {
+                alertService.setEnabled(true);
+                await sendReply(activity, '🔔 Alerts enabled.');
+                return true;
+            }
+            if (sub === 'off' || sub === 'disable') {
+                alertService.setEnabled(false);
+                await sendReply(activity, '🔕 Alerts disabled.');
+                return true;
+            }
+            if (sub.startsWith('mode ')) {
+                const mode = sub.split(' ')[1];
+                if (['both', 'gc', '1to1'].includes(mode)) {
+                    alertService.setMode(mode as 'both' | 'gc' | '1to1');
+                    await sendReply(activity, `📣 Alert mode set to ${mode}.`);
+                    return true;
+                }
+                await sendReply(activity, 'Usage: /alert mode both|gc|1to1');
+                return true;
+            }
+            if (sub === 'gcon') {
+                if (!convId) { await sendReply(activity, '⚠️ Could not identify this conversation.'); return true; }
+                alertService.registerAdminGC(activity);
+                await sendReply(activity, `🏢 This group chat is now the admin alert channel (${convId}).`);
+                return true;
+            }
+            if (sub === 'test') {
+                const summary = await alertService.testAlert();
+                await sendReply(activity, summary);
+                return true;
+            }
+            await sendReply(activity, 'Alert commands: (alone = status), on, off, mode both|gc|1to1, gcon, test');
+            return true;
+        }
 
         default:
             return false;

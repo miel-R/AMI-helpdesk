@@ -1,5 +1,6 @@
 import { flowService } from '../services/flow.service';
 import { ticketService } from '../services/ticket.service';
+import { alertService } from '../services/alert.service';
 import { aiService, HistoryItem, ImageData } from '../services/ai.service';
 import { queueService } from '../services/queue.service';
 import { logger } from '../utils/logger';
@@ -241,6 +242,15 @@ export class HelpDeskAgent {
 
         // Detect if AI decided a ticket should be created
         if (this.aiWantsToCreateTicket(aiResponse, message)) {
+            if (!config.enableTickets) {
+                // Tickets disabled: alert the admins instead, then reassure the user.
+                await alertService.notifyIssue({
+                    reporterName: context.from?.name,
+                    reporterId: userId,
+                    message: message || '(image attachment)'
+                });
+                return '🔔 I\'ve alerted the Help Desk about your issue. An admin will personally reach out to you. In the meantime, feel free to continue describing your problem.';
+            }
             const ticketResponse = await this.startSmartTicketCollection(userId, message, history, context);
             return ticketResponse;
         }
