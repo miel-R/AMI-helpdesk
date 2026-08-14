@@ -14,6 +14,7 @@ Built with TypeScript + Express, speaking the Bot Framework /v3 protocol directl
 - **Language mirroring** — casual Taglish for Tagalog speakers, natural English otherwise
 - **Confidentiality guard** — refuses sensitive topics (salaries, pricing, employee data, credentials, etc.) before any AI call
 - **Group chat approval gate** — silent in unapproved group chats until an administrator approves
+- **Crisis alerting** — emergency-level issues page the Help Desk admins (registered group chat + each admin's 1:1) instead of getting buried in tickets
 - **Runtime admin management** via slash commands — no restarts needed
 - **Secure for production** — Teams JWT validation on inbound messages, signed bot tokens on outbound replies and image downloads
 - Rate limiting, queueing, session management, caching, metrics
@@ -87,6 +88,17 @@ Usage examples:
 /approve
 ```
 
+## Help Desk Alerts
+
+When an incoming message is judged high-priority/emergency (AI verdict, or keyword rules when no AI key is configured), Ami skips ticket collection and fires a **Help Desk Alert** instead:
+
+- **Admin group chat** — the chat registered via `/alert gcon` receives the alert (persisted in `alert-config.json`, git-ignored).
+- **Admin 1:1 chats** — every administrator who has ever messaged Ami gets a private alert. These refs are in-memory: after a bot restart, each admin sends one message (any command works) to re-register.
+- **Reporter reply** — the person who reported the issue gets a confirmation that the Help Desk has been alerted.
+- **Dedupe** — the same reporter is re-alerted at most once per `dedupeMinutes` (default 10) to prevent spam.
+
+Manage it with `/alert` (admin-only): `status`, `on`, `off`, `mode both|gc|1to1`, `gcon`, `test`. With `ENABLE_TICKETS=false` (default), issues produce alerts rather than tickets.
+
 ## Access Control (`access-control.json`)
 
 Runtime access state is persisted to `access-control.json` (git-ignored) in the project root:
@@ -103,6 +115,7 @@ Runtime access state is persisted to `access-control.json` (git-ignored) in the 
 - **First run**: the file is created and seeded from env vars (`ALLOWED_USER_IDS`, `ADMIN_USER_IDS`, `APPROVED_CONVERSATION_IDS`). After that, the JSON is the source of truth — edit it directly or use the admin commands.
 - **Default-deny**: empty lists mean nobody is allowed (except admins). `allowedUserIds` empty but admins present = admins only.
 - Delete the file to reset all access state (bot re-seeds from env on next start).
+- Alert channel state lives in its own runtime file, `alert-config.json` (also git-ignored), managed via `/alert`.
 
 ## Conversation Gating
 
@@ -159,6 +172,7 @@ Loaded in order: `.env.dev` → `env/.env.dev` → `env/.env.dev.user` → `.env
 | `SENSITIVE_TOPICS` | Extra sensitive phrases to block | — |
 | `TICKET_PREFIX` | Ticket ID prefix | `AMR` |
 | `NOTIFY_ON_TICKET` | Ticket notification flag | `false` |
+| `ENABLE_TICKETS` | Collect/create tickets; when `false`, emergency issues fire admin alerts instead | `false` |
 | `MAX_CONCURRENT`, `QUEUE_TIMEOUT`, `SESSION_TIMEOUT`, `RATE_LIMIT_WINDOW`, `MAX_REQUESTS_PER_WINDOW` | Performance tuning | see `.env.example` |
 | `CACHE_TTL`, `MAX_CACHE_SIZE` | Response cache | `3600`, `1000` |
 | `MAX_IMAGE_SIZE_MB`, `UPLOAD_DIR` | Image attachment handling | `10`, `/ami-uploads` |
