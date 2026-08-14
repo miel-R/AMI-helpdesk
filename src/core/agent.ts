@@ -123,6 +123,7 @@ export class HelpDeskAgent {
     async handleMessage(context: UserRequest): Promise<string> {
         const startTime = Date.now();
         const userId = context.from?.id || 'unknown';
+        const userName = context.from?.name;
         const message = (context.text || '').trim();
         const image = context.image;
 
@@ -192,7 +193,7 @@ export class HelpDeskAgent {
                 response = await this.continueTicketCollection(userId, message, tc, history, image);
             } else {
                 // Otherwise, let the AI decide what to do
-                response = await this.processWithAI(userId, userText, image, history, isUrgent, context);
+                response = await this.processWithAI(userId, userText, image, history, isUrgent, context, userName);
             }
 
             // Add bot response to history
@@ -220,7 +221,8 @@ export class HelpDeskAgent {
         image: ImageData | undefined,
         history: HistoryItem[],
         isUrgent: boolean,
-        context: UserRequest
+        context: UserRequest,
+        userName?: string
     ): Promise<string> {
 
         if (aiService.getActiveProvider() === 'none') {
@@ -228,7 +230,7 @@ export class HelpDeskAgent {
         }
 
         // Build a rich context-aware system prompt
-        const systemPrompt = this.buildSystemPrompt(userId, isUrgent);
+        const systemPrompt = this.buildSystemPrompt(userId, isUrgent, userName);
 
         // Ask AI to respond, including a hidden instruction about ticket intent
         const augmentedMessage = isUrgent
@@ -248,9 +250,13 @@ export class HelpDeskAgent {
 
     // ── System Prompt Builder ──────────────────────────────────────────────────
 
-    private buildSystemPrompt(userId: string, isUrgent: boolean): string {
+    private buildSystemPrompt(userId: string, isUrgent: boolean, userName?: string): string {
         const tc = this.ticketCollections.get(userId);
         let prompt = MASTER_SYSTEM_PROMPT;
+
+        if (userName) {
+            prompt += `\n\nYou are currently talking to ${userName} (${userId}). Address them naturally when it helps.`;
+        }
 
         if (isUrgent) {
             prompt += `\n\nNOTE: This user's message contains urgent/frustrated language. Be extra empathetic and offer to create a support ticket immediately.`;

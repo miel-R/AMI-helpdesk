@@ -37,6 +37,11 @@ export const config = {
     port: parseInt(process.env.PORT || '3978', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
 
+    // Bot (Bot Framework / Teams) credentials — injected by .localConfigs (dev) or App Service env (prod)
+    botId: process.env.BOT_ID || '',
+    botPassword: process.env.BOT_PASSWORD || process.env.SECRET_BOT_PASSWORD || '',
+    botEndpoint: process.env.BOT_ENDPOINT || '',
+
     // AI - Provider selection
     // Set AI_PROVIDER to 'gemini', 'openai', or 'azure' to force a specific provider.
     // If not set, auto-detects based on which API key is present.

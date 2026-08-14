@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getBotToken } from '../services/auth.service';
 
 export interface ProcessedImageData {
     fileName: string;
@@ -55,7 +56,12 @@ export class ImageHandler {
             }
         } else if (attachment.contentUrl?.startsWith('http')) {
             try {
-                const response = await fetch(attachment.contentUrl);
+                // Real Teams attachment URLs require the bot's bearer token; the
+                // emulator accepts anonymous requests.
+                const token = await getBotToken();
+                const headers: Record<string, string> = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                const response = await fetch(attachment.contentUrl, { headers });
                 imageData = Buffer.from(await response.arrayBuffer());
             } catch (error) {
                 console.error('Image download failed:', error);

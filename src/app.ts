@@ -4,6 +4,7 @@ import { agent } from './core/agent';
 import { ticketService } from './services/ticket.service';
 import { flowService } from './services/flow.service';
 import { accessService } from './services/access.service';
+import { authenticateIncomingRequest, getBotToken } from './services/auth.service';
 import { ImageHandler } from './handlers/image.handler';
 import { config } from './config/config';
 import { logger } from './utils/logger';
@@ -47,6 +48,12 @@ app.post('/api/messages', async (req: Request, res: Response) => {
         // The emulator/test channel is a local testing tool: bypass all gating
         // (mention-only, approval, allowlist) so any session just works.
         const isEmulator = body.channelId === 'emulator' || body.channelId === 'test';
+
+        // Validate the incoming activity (real Teams JWT) before doing anything else
+        if (!(await authenticateIncomingRequest(req.headers, body, isEmulator))) {
+            logger.warn('🚫 Rejected unauthenticated activity.');
+            return;
+        }
 
         // Handle conversationUpdate events (when user joins)
         if (body.type === 'conversationUpdate') {
@@ -299,7 +306,7 @@ function removeMention(text: string, botId: string): string {
 
 // Helper: Send a reply to the user
 async function sendReply(originalActivity: any, text: string): Promise<void> {
-    const reply = {
+    const reply: any = {
         type: 'message',
         from: { id: originalActivity.recipient.id, name: originalActivity.recipient.name },
         conversation: { id: originalActivity.conversation.id },
@@ -307,6 +314,14 @@ async function sendReply(originalActivity: any, text: string): Promise<void> {
         text: text,
         replyToId: originalActivity.id,
     };
+
+    // Mention the user Ami is talking to, so everyone in a group chat knows
+    // who the reply is for (real Teams mention; plain text fallback).
+    const mention = buildMention(originalActivity);
+    if (mention) {
+        reply.text = `${mention.text} ${text}`;
+        reply.entities = [mention.entity];
+    }
 
     const serviceUrl = originalActivity.serviceUrl;
     const conversationId = originalActivity.conversation.id;
@@ -320,13 +335,35 @@ async function sendReply(originalActivity: any, text: string): Promise<void> {
             text: (text || '').substring(0, 50) + '...'
         });
 
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = await getBotToken();
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
         // We don't have auth set up, so we send without a token.
         // This is fine for the emulator but will require auth for real channels.
-        await axios.post(replyUrl, reply);
+        await axios.post(replyUrl, reply, { headers });
 
     } catch (error: any) {
         logger.error('❌ Error sending reply:', error.response?.data || error.message);
     }
+}
+
+// Build a Teams mention for the sender of an activity (null when not applicable)
+function buildMention(activity: any): { text: string; entity: any } | null {
+    if (activity.type !== 'message') return null;
+    const sender = activity.from;
+    if (!sender || !sender.id || sender.id === activity.recipient?.id) return null;
+
+    if (sender.name) {
+        const mentionText = `<at>${sender.name}</at>`;
+        return {
+            text: mentionText,
+            entity: { type: 'mention', mentioned: { id: sender.id, name: sender.name }, text: mentionText }
+        };
+    }
+    return { text: `@${sender.id}`, entity: null };
 }
 
 // Health check

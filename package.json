@@ -13,8 +13,8 @@
         "dev:teamsfx:playground": "env-cmd --silent -f .localConfigs.playground npm run dev",
         "dev:teamsfx:launch-playground": "env-cmd --silent -f env/.env.playground agentsplayground start",
         "dev": "nodemon --exec ts-node src/index.ts",
-        "build": "tsc --build",
-        "start": "node ./lib/src/index.js",
+        "build": "tsc --build && shx cp -r src/flows dist/flows",
+        "start": "node ./dist/index.js",
         "test": "echo \"Error: no test specified\" && exit 1",
         "watch": "nodemon --exec \"npm run start\""
     },
@@ -28,6 +28,7 @@
         "@google/genai": "^2.15.0",
         "@microsoft/agents-hosting-express": "^1.0.0",
         "axios": "^1.5.0",
+        "botframework-connector": "^4.23.3",
         "dotenv": "^17.4.2",
         "express": "^4.18.2",
         "node-cache": "^5.1.2",
