@@ -408,6 +408,7 @@ function removeMention(text: string, botId: string): string {
 async function sendReply(originalActivity: any, text: string): Promise<void> {
     const reply: any = {
         type: 'message',
+        textFormat: 'markdown',
         from: { id: originalActivity.recipient.id, name: originalActivity.recipient.name },
         conversation: { id: originalActivity.conversation.id },
         recipient: { id: originalActivity.from.id, name: originalActivity.from.name },

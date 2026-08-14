@@ -196,6 +196,7 @@ export class AlertService {
 
         const reply: any = {
             type: 'message',
+            textFormat: 'markdown',
             from: { id: ref?.recipient?.id, name: ref?.recipient?.name },
             conversation: { id: conversationId },
             recipient: { id: ref?.from?.id, name: ref?.from?.name },
