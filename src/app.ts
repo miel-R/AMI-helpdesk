@@ -16,11 +16,16 @@ const USER_HELP = [
     '• `create a ticket` — start a ticket request (issue type, description, urgency, department).',
     '• 📸 Send a screenshot with your message for image analysis.',
     '• `@mention Ami` in group chats so I notice you.',
+    '• `/reset` — clear conversation history and start fresh.',
+    '• `/status` — see the ticket info collected so far.',
+    '• `/end` (or `/exit`, `/quit`) — end the conversation.',
     '• `/help` — show this list.',
     '• `/admin` — check if you are an administrator.'
 ].join('\n');
 
 const ADMIN_HELP = [
+    '🛡️ Yes — you are an administrator. You can run every command below.',
+    '',
     USER_HELP,
     '',
     '🛡️ **Admin commands**',
@@ -134,16 +139,16 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             const cmdText = removeMention((body.text || '').trim(), body.recipient?.id).trim();
             if (senderId && /^\/admin\b/i.test(cmdText)) {
                 if (accessService.isAdmin(senderId)) {
-                    await sendReply(body, '🛡️ Yes — you are an administrator. You can approve chats (/approve) and manage access (/allow, /disallow, /addadmin, /removeadmin, /allowlist, /admins, /restart).');
+                    await sendReply(body, ADMIN_HELP);
                 } else {
-                    await sendReply(body, '❌ No — you are not an administrator. Ask a Help Desk admin if you need access.');
+                    await sendReply(body, '🔒 Admin access required. Type /help to see the commands available to you.');
                 }
                 return;
             }
 
-            // Everyone can ask for help; admins see the full command list
+            // Everyone gets the same help message; admin commands are revealed via /admin
             if (senderId && /^\/help\b/i.test(cmdText)) {
-                await sendReply(body, accessService.isAdmin(senderId) ? ADMIN_HELP : USER_HELP);
+                await sendReply(body, USER_HELP);
                 return;
             }
 

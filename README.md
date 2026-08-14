@@ -53,10 +53,11 @@ The emulator channel responds to every message. In real Teams, Ami only responds
 
 | Command | What it does |
 |---|---|
-| `/help` | Show the help message (admins see the full command list) |
-| `/admin` | Check whether you are an administrator |
+| `/help` | Show the help message (same for everyone; admins see their command list via `/admin`) |
+| `/admin` | Admins: confirm permission + full admin command list. Non-admins: pointed to `/help` |
 | `/status` | Show ticket info collected so far |
 | `/reset` | Clear conversation history and start fresh |
+| `/end` | End the conversation (also `/exit`, `/quit`) |
 
 Ami also ends the conversation on farewell words (`bye`, `goodbye`, `quit`, `exit`, `done`, `stop`, `see you`, `take care`, etc.).
 
@@ -66,8 +67,8 @@ Admin commands work in any chat — including unapproved group chats — and tak
 
 | Command | What it does |
 |---|---|
-| `/admin` | Check whether you are an administrator |
-| `/help` | Show the full command list (user + admin) |
+| `/admin` | Confirm admin permission + show the full admin command list |
+| `/help` | Show the shared user help message (same as everyone) |
 | `/allow <user-id>` | Add a user to the allowlist (who may trigger Ami) |
 | `/disallow <user-id>` | Remove a user from the allowlist |
 | `/allowlist` | List allowed users and admins |
