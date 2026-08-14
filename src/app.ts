@@ -100,6 +100,10 @@ app.post('/api/messages', async (req: Request, res: Response) => {
             const isGroupChat = body.conversation?.conversationType === 'groupChat';
             const senderId = body.from?.id;
 
+            // Remember admin conversations so issue alerts can be 1:1'd privately
+            // (before the admin-command gate so commands also learn the ref)
+            if (senderId) alertService.rememberConversation(senderId, body);
+
             // Anyone can check whether they are an administrator (works everywhere)
             const cmdText = removeMention((body.text || '').trim(), body.recipient?.id).trim();
             if (senderId && /^\/admin\b/i.test(cmdText)) {
@@ -189,8 +193,6 @@ app.post('/api/messages', async (req: Request, res: Response) => {
 
             // Remember the user's last conversation so a farewell can be posted on timeout
             userContexts.set(senderId, body);
-            // Remember admin conversations so issue alerts can be 1:1'd privately
-            alertService.rememberConversation(senderId, body);
 
             // Process the message
             const responseText = await agent.handleMessage({ ...body, image: imageData || undefined });
