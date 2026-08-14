@@ -47,7 +47,12 @@ app.post('/api/messages', async (req: Request, res: Response) => {
 
         // The emulator/test channel is a local testing tool: bypass all gating
         // (mention-only, approval, allowlist) so any session just works.
-        const isEmulator = body.channelId === 'emulator' || body.channelId === 'test';
+        // Hardening: this bypass only applies when the traffic genuinely comes
+        // from the local emulator (loopback source) — a remote actor spoofing
+        // channelId "emulator" still hits JWT validation + all the gates.
+        const remoteAddr = (req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+        const fromLoopback = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === 'localhost';
+        const isEmulator = (body.channelId === 'emulator' || body.channelId === 'test') && fromLoopback;
 
         // Validate the incoming activity (real Teams JWT) before doing anything else
         if (!(await authenticateIncomingRequest(req.headers, body, isEmulator))) {
