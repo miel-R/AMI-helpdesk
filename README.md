@@ -53,7 +53,7 @@ The emulator channel responds to every message. In real Teams, Ami only responds
 
 | Command | What it does |
 |---|---|
-| `/help` | Show the help message |
+| `/help` | Show the help message (admins see the full command list) |
 | `/admin` | Check whether you are an administrator |
 | `/status` | Show ticket info collected so far |
 | `/reset` | Clear conversation history and start fresh |
@@ -67,6 +67,7 @@ Admin commands work in any chat — including unapproved group chats — and tak
 | Command | What it does |
 |---|---|
 | `/admin` | Check whether you are an administrator |
+| `/help` | Show the full command list (user + admin) |
 | `/allow <user-id>` | Add a user to the allowlist (who may trigger Ami) |
 | `/disallow <user-id>` | Remove a user from the allowlist |
 | `/allowlist` | List allowed users and admins |
@@ -74,7 +75,8 @@ Admin commands work in any chat — including unapproved group chats — and tak
 | `/removeadmin <user-id>` | Revoke administrator rights |
 | `/admins` | List administrators |
 | `/approve` | Approve the current group chat (unlocks it) |
-| `/restart` | Soft restart: clear sessions, reload flows and access lists |
+| `/restart` | Soft restart: clear sessions, reload flows, access and alert config |
+| `/alert [status\|on\|off\|mode both\|gc\|1to1\|gcon\|test]` | Manage Help Desk issue alerts (crisis alerts to admin GC + admin 1:1 chats) |
 
 Usage examples:
 

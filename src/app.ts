@@ -10,6 +10,32 @@ import { ImageHandler } from './handlers/image.handler';
 import { config } from './config/config';
 import { logger } from './utils/logger';
 
+const USER_HELP = [
+    '👋 **Ami Help Desk — how to use me**',
+    '• Just chat naturally: say "hello", report an issue, or ask about the help desk.',
+    '• `create a ticket` — start a ticket request (issue type, description, urgency, department).',
+    '• 📸 Send a screenshot with your message for image analysis.',
+    '• `@mention Ami` in group chats so I notice you.',
+    '• `/help` — show this list.',
+    '• `/admin` — check if you are an administrator.'
+].join('\n');
+
+const ADMIN_HELP = [
+    USER_HELP,
+    '',
+    '🛡️ **Admin commands**',
+    '• `/allow <user-id>` — allow a user to chat 1:1 with Ami.',
+    '• `/disallow <user-id>` — remove a user from the allowlist.',
+    '• `/allowlist` — list allowed users and admins.',
+    '• `/addadmin <user-id>` — make a user an administrator.',
+    '• `/removeadmin <user-id>` — remove an administrator.',
+    '• `/admins` — list administrators.',
+    '• `/approve` — approve this group chat (Ami becomes active here).',
+    '• `/restart` — soft restart: clear sessions, reload flows, access and alert config.',
+    '• `/alert [status|on|off|mode both|gc|1to1|gcon|test]` — manage Help Desk issue alerts.',
+    '• `/admin` — check your admin status.'
+].join('\n');
+
 const app = express();
 
 app.use(express.json({ limit: '16mb' }));
@@ -112,6 +138,12 @@ app.post('/api/messages', async (req: Request, res: Response) => {
                 } else {
                     await sendReply(body, '❌ No — you are not an administrator. Ask a Help Desk admin if you need access.');
                 }
+                return;
+            }
+
+            // Everyone can ask for help; admins see the full command list
+            if (senderId && /^\/help\b/i.test(cmdText)) {
+                await sendReply(body, accessService.isAdmin(senderId) ? ADMIN_HELP : USER_HELP);
                 return;
             }
 
